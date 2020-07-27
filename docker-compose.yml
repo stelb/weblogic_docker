@@ -1,0 +1,82 @@
+#version: "3.5"
+version: "2"
+services:
+  wlas:
+    build:
+      context: ./build/12214-domain
+    image: wls:cluster
+    #image: store/oracle/weblogic:12.2.1.4
+    ports:
+      - "7001"
+      - "9002"
+    volumes:
+      - ./vols/properties:/u01/oracle/properties
+    environment:
+      DOMAIN_NAME: base_domain
+    networks:
+      - wls
+      - oracle
+
+# docker run -d -p ${mapedport}:${MANAGED_SERVER_PORT} -v ${scriptDir}/properties:/u01/oracle/properties ${ENV_ARG} --volumes-from ${adminhost} --link ${adminhost}:${adminhost} --name ${managedname} 12213-weblogic-domain-in-volume /u01/oracle/container-scripts/startManagedServer.sh 
+  wlms:
+    image: wls:cluster
+    command: /u01/oracle/container-scripts/startManagedServer.sh
+    #store/oracle/weblogic:12.2.1.4
+    volumes_from:
+      - wlas:rw
+    environment:
+      DOMAIN_NAME: base_domain
+      ADMIN_HOST: wlas
+      ADMIN_LISTEN_PORT: '7001'
+      #MANAGED_NAME: "$HOSTNAME"
+      MANAGED_NAME: MS1
+      MANAGED_SERVER_CONTAINER: "true"
+    networks:
+      - wls
+      - oracle
+
+  haproxy:
+    image: haproxy
+    volumes:
+     - ./vols/haproxy:/usr/local/etc/haproxy
+    links:
+     - wlas
+    ports:
+     - "7001:7001"
+     - "9002:9002"
+    expose:
+     - "7001"
+     - "9002"
+    networks:
+      - wls
+
+  oracle:
+    image: store/oracle/database-enterprise:12.2.0.1-slim
+    volumes:
+      - ./vols/oracle/ORCL:/ORCL
+    environment:
+      DB_SID: WLSC
+      DB_PDB: WLS
+      DB_MEMORY: 2GB
+    ports:
+      - "5550:5550"
+      - "1521:1521"
+    networks:
+      - oracle
+
+networks:
+  wls:
+    driver: bridge
+  oracle:
+    driver: bridge
+
+#  lb:
+#    image: eeacms/haproxy
+#    depends_on:
+#    - wl
+#    ports:
+#    - "9002:9002"
+#    environment:
+#      BACKENDS: "wl"
+#      DNS_ENABLED: "true"
+#      LOG_LEVEL: "info"
